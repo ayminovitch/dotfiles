@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "ask": [
+      "Bash(dangerouslyDisableSandbox:true)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(!.env.example)",
+      "Read(*.pem)",
+      "Read(*.key)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.netrc)",
+      "Read(~/Library/Keychains/**)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "excludedCommands": [
+      "git fetch *",
+      "git pull *",
+      "git push *",
+      "gh *",
+      "docker compose *",
+      "docker ps *",
+      "docker logs *"
+    ],
+    "network": {
+      "allowLocalBinding": true,
+      "allowedDomains": [
+        "pypi.org",
+        "files.pythonhosted.org",
+        "registry.npmjs.org"
+      ]
+    },
+    "credentials": {
+      "files": [
+        { "path": "~/.ssh", "mode": "deny" },
+        { "path": "~/.aws", "mode": "deny" },
+        { "path": "~/.config/gh", "mode": "deny" },
+        { "path": "~/.netrc", "mode": "deny" },
+        { "path": "~/.docker/config.json", "mode": "deny" },
+        { "path": "~/.gemini/oauth_creds.json", "mode": "deny" }
+      ],
+      "envVars": [
+        { "name": "ANTHROPIC_API_KEY", "mode": "deny" },
+        { "name": "OPENAI_API_KEY", "mode": "deny" },
+        { "name": "GEMINI_API_KEY", "mode": "deny" },
+        { "name": "GROQ_API_KEY", "mode": "deny" },
+        { "name": "OPENROUTER_API_KEY", "mode": "deny" },
+        { "name": "GOOGLE_API_KEY", "mode": "deny" },
+        { "name": "HF_TOKEN", "mode": "deny" },
+        { "name": "GITHUB_TOKEN", "mode": "deny" },
+        { "name": "GH_TOKEN", "mode": "deny" },
+        { "name": "AWS_ACCESS_KEY_ID", "mode": "deny" },
+        { "name": "AWS_SECRET_ACCESS_KEY", "mode": "deny" },
+        { "name": "AWS_SESSION_TOKEN", "mode": "deny" },
+        { "name": "LANGFUSE_SECRET_KEY", "mode": "deny" }
+      ]
+    }
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "\"$HOME/dotfiles/claude/statusline.sh\""
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/dotfiles/claude/hooks/format-python.sh\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/dotfiles/claude/hooks/notify.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

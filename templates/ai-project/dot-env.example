@@ -1,0 +1,19 @@
+# Copy to .env (newproj does it for you). Never commit .env.
+# API keys don't go here: store them once with `secret set ANTHROPIC_API_KEY` (macOS Keychain)
+# and .envrc loads them when you cd into the project.
+ENVIRONMENT=local
+LOG_LEVEL=INFO
+
+# Which model to use. Switching provider only means changing this line:
+#   free: ollama/gemma4:12b (local) · gemini/<flash-model> · groq/<model> · openrouter/<vendor>/<model>:free
+#   paid: openai/<model> · anthropic/<model>
+LLM_MODEL=ollama/gemma4:12b
+
+# Local models (Ollama) and vector store (Postgres + pgvector from compose.yaml)
+OLLAMA_BASE_URL=http://localhost:11434
+DATABASE_URL=postgresql://app:app@localhost:5432/__PKG__
+
+# Tracing (optional): `langfuse up`, then `langfuse keys` prints these for a local dashboard
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_SECRET_KEY=
+LANGFUSE_HOST=http://localhost:3000

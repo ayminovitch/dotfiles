@@ -1,0 +1,36 @@
+# Ignored in every repo on this Mac (safety net against leaking secrets and junk)
+
+# macOS
+.DS_Store
+.AppleDouble
+._*
+
+# Secrets, never commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.netrc
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# JavaScript
+node_modules/
+
+# Editors
+.idea/
+*.swp
+
+# Logs
+*.log
+
+# Claude Code personal overrides
+.claude/settings.local.json

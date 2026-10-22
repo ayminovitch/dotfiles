@@ -1,0 +1,111 @@
+{
+  // Security: never auto-run tasks when a folder opens. Fake "take-home test" repos use this.
+  "security.workspace.trust.enabled": true,
+  "security.workspace.trust.untrustedFiles": "prompt",
+  "task.allowAutomaticTasks": "off",
+  "telemetry.telemetryLevel": "off",
+  // Look: my theme Archipelago Dark (PyCharm's Islands look) and the Atom Material icons,
+  // so switching between VS Code and PyCharm doesn't feel like switching tools.
+  "workbench.colorTheme": "Archipelago Dark",
+  "workbench.experimental.modernUIEditorTabStyle": "pill", // rounded active tab, like PyCharm
+  "workbench.iconTheme": "a-file-icon-vscode",
+  "workbench.tree.indent": 16,
+  "workbench.tree.renderIndentGuides": "none",
+  "workbench.list.smoothScrolling": true,
+  "window.commandCenter": true,
+  "breadcrumbs.enabled": true,
+  // Project tree like PyCharm: one folder per row, git status by color only (no M/U letters)
+  "explorer.compactFolders": false,
+  "explorer.decorations.badges": false,
+  "workbench.editor.decorations.badges": false,
+  "workbench.editor.decorations.colors": true,
+  // No inline git blame pushing code around. When I want it: "GitLens: Toggle File Blame"
+  "gitlens.codeLens.enabled": false,
+  "gitlens.currentLine.enabled": false,
+  // quieter status bar
+  "gitlens.launchpad.indicator.enabled": false,
+  "git-graph.showStatusBarItem": false,
+  "editor.fontFamily": "'JetBrains Mono', Menlo, monospace",
+  // Whole UI 5% bigger. VS Code has no separate sidebar font size, this is the only knob
+  "window.zoomLevel": 0.25,
+  "editor.fontSize": 19, // 20 after the zoom, same as my PyCharm
+  "editor.fontWeight": "550", // PyCharm renders text heavier, this gets close
+  "editor.lineHeight": 1.65,
+  "editor.fontLigatures": false,
+  "editor.padding.top": 8,
+  "editor.renderLineHighlight": "all",
+  "editor.cursorSmoothCaretAnimation": "on",
+  "editor.smoothScrolling": true,
+  "editor.guides.indentation": false,
+  // Editor
+  "files.autoSave": "onFocusChange", // save (and format) when switching away, like PyCharm
+  "editor.formatOnSave": true,
+  "editor.rulers": [
+    100
+  ],
+  "editor.minimap.enabled": false,
+  "editor.stickyScroll.enabled": true,
+  "editor.bracketPairColorization.enabled": false,
+  "editor.guides.bracketPairs": false,
+  "editor.linkedEditing": true,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "workbench.startupEditor": "none",
+  "errorLens.enabledDiagnosticLevels": [
+    "error",
+    "warning"
+  ],
+  // Terminal: a Nerd Font so the Powerlevel10k icons show up
+  "terminal.integrated.fontFamily": "'MesloLGS Nerd Font', 'MesloLGS NF', Menlo, monospace",
+  "terminal.integrated.fontSize": 14,
+  // Don't watch or search generated folders
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.venv/**": true,
+    "**/node_modules/**": true,
+    "**/.mypy_cache/**": true,
+    "**/.ruff_cache/**": true,
+    "**/__pycache__/**": true
+  },
+  "search.exclude": {
+    "**/.venv": true,
+    "**/node_modules": true,
+    "**/uv.lock": true
+  },
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true,
+    "**/.mypy_cache": true
+  },
+  // Python (uv puts .venv inside the project)
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.terminal.activateEnvironment": true,
+  "python.analysis.typeCheckingMode": "standard",
+  "python.analysis.autoImportCompletions": true,
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+  // Other languages
+  "[json][jsonc]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "[toml]": {
+    "editor.defaultFormatter": "tamasfe.even-better-toml"
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml"
+  },
+  // Git
+  "git.autofetch": true,
+  "git.confirmSync": false,
+  "git.enableCommitSigning": true,
+  "claudeCode.hideOnboarding": true,
+  "claudeCode.preferredLocation": "panel"
+}

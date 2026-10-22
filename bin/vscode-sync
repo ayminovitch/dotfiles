@@ -1,0 +1,83 @@
+#!/bin/bash
+# vscode-sync: make VS Code's extensions match vscode/extensions.txt.
+# Installs what's missing (including local .vsix builds in vscode/*/, like my theme before it's
+# on the Marketplace), keeps whatever those extensions depend on, and asks before removing the rest.
+#
+#   vscode-sync          asks before removing anything
+#   vscode-sync --yes    no questions (for scripts)
+set -uo pipefail
+
+DOTFILES="${DOTFILES:-$HOME/dotfiles}"
+LIST="$DOTFILES/vscode/extensions.txt"
+EXT_DIR="$HOME/.vscode/extensions"
+CODE="$(command -v code || echo "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code")"
+YES="${1:-}"
+
+green=$'\033[32m'; yellow=$'\033[33m'; bold=$'\033[1m'; reset=$'\033[0m'
+ok()   { printf '%s✓%s %s\n' "$green" "$reset" "$*"; }
+warn() { printf '%s!%s %s\n' "$yellow" "$reset" "$*"; }
+
+[ -x "$CODE" ] || { warn "VS Code not found"; exit 1; }
+command -v jq >/dev/null || { warn "jq is required (brew install jq)"; exit 1; }
+
+lower() { tr '[:upper:]' '[:lower:]'; }
+wanted="$(sed -e 's/#.*//' -e 's/[[:space:]]*$//' "$LIST" | grep -v '^$' | lower | sort -u)"
+
+# 0. Local builds (not on the Marketplace): install, or update when the version changed.
+#    If several builds of one extension exist, the newest version wins.
+local_builds="$(for v in "$DOTFILES"/vscode/*/*.vsix; do
+  [ -f "$v" ] || continue
+  unzip -p "$v" extension/package.json 2>/dev/null \
+    | jq -r --arg p "$v" '"\(.publisher + "." + .name | ascii_downcase) \(.version) \($p)"'
+done | sort -k1,1 -k2,2V | awk '{ last[$1] = $0 } END { for (k in last) print last[k] }')"
+local_ids="$(printf '%s\n' "$local_builds" | awk 'NF { print $1 }')"
+while read -r id ver vsix; do
+  [ -n "$id" ] || continue
+  wanted="$(printf '%s\n%s\n' "$wanted" "$id" | sort -u)"
+  current="$("$CODE" --list-extensions --show-versions </dev/null 2>/dev/null | lower | grep "^$id@" | cut -d@ -f2)"
+  # Skip when the installed copy is the same or newer (e.g. already updated from the Marketplace)
+  if [ -n "$current" ] && [ "$(printf '%s\n%s\n' "$current" "$ver" | sort -V | tail -1)" = "$current" ]; then continue; fi
+  "$CODE" --install-extension "$vsix" --force </dev/null >/dev/null 2>&1 && ok "installed $id $ver (local build)" \
+    || warn "could not install $vsix"
+done <<< "$local_builds"
+
+# 1. Install what's missing from the Marketplace
+installed="$("$CODE" --list-extensions 2>/dev/null | lower | sort -u)"
+for ext in $(comm -23 <(echo "$wanted") <(echo "$installed") | grep -vxF "${local_ids:-#none#}"); do
+  "$CODE" --install-extension "$ext" >/dev/null 2>&1 && ok "installed $ext" || warn "could not install $ext"
+done
+
+# 2. Keep dependencies and extension-pack members of everything wanted (a few passes = transitive)
+keep="$wanted"
+for _ in 1 2 3; do
+  for pj in "$EXT_DIR"/*/package.json; do
+    [ -f "$pj" ] || continue
+    id="$(jq -r '(.publisher + "." + .name) | ascii_downcase' "$pj" 2>/dev/null)"
+    echo "$keep" | grep -qxF "$id" || continue
+    deps="$(jq -r '((.extensionDependencies // []) + (.extensionPack // []))[] | ascii_downcase' "$pj" 2>/dev/null)"
+    [ -n "$deps" ] && keep="$(printf '%s\n%s\n' "$keep" "$deps" | sort -u)"
+  done
+done
+
+# 3. Offer to remove the rest
+installed="$("$CODE" --list-extensions 2>/dev/null | lower | sort -u)"
+extra="$(comm -23 <(echo "$installed") <(echo "$keep"))"
+if [ -z "$extra" ]; then ok "VS Code extensions match extensions.txt ($(echo "$installed" | wc -l | tr -d ' ') installed)"; exit 0; fi
+
+printf '\n%sInstalled but not in extensions.txt:%s\n' "$bold" "$reset"
+echo "$extra" | sed 's/^/  /'
+echo "  (to keep one, add its ID to $LIST and run vscode-sync again)"
+if [ "$YES" != "--yes" ]; then
+  read -r -p "Uninstall these $(echo "$extra" | wc -l | tr -d ' ') extensions? [Y/n] " reply </dev/tty
+  case "${reply:-Y}" in [Yy]*) ;; *) exit 0 ;; esac
+fi
+# Two passes: an extension can't be removed while another installed one still depends on it
+for _ in 1 2; do
+  for ext in $extra; do
+    "$CODE" --list-extensions 2>/dev/null | lower | grep -qxF "$ext" || continue
+    "$CODE" --uninstall-extension "$ext" >/dev/null 2>&1 && ok "removed $ext"
+  done
+done
+left="$(comm -12 <("$CODE" --list-extensions 2>/dev/null | lower | sort -u) <(echo "$extra"))"
+[ -z "$left" ] || warn "Still installed (VS Code refused): $(echo "$left" | tr '\n' ' ')"
+ok "Done. Reload open VS Code windows (Cmd+Shift+P, Developer: Reload Window)"

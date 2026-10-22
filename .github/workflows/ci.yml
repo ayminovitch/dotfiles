@@ -1,0 +1,68 @@
+# Checks this repo on every push: the scripts, the settings files, the skills, and that a project
+# made with `newproj` installs and passes its own checks. Runs on Linux (cheap and fast); the
+# macOS-only parts (bootstrap, Keychain) are covered by shellcheck, not executed.
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Scripts, settings and skills
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install shellcheck and zsh
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck zsh
+
+      - name: Shell scripts
+        run: shellcheck -S warning bin/* scripts/*.sh macos/*.sh claude/*.sh claude/hooks/*.sh
+
+      - name: Zsh config parses
+        run: for f in zsh/zshrc zsh/zprofile; do zsh -n "$f" && echo "ok $f"; done
+
+      - name: JSON settings
+        run: for f in claude/settings.json templates/ai-project/dot-claude/settings.json; do jq empty "$f" && echo "ok $f"; done
+
+      - name: Skills load in Claude Code and Gemini CLI
+        run: bash scripts/check-skills.sh
+
+  template:
+    name: newproj + just check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
+
+      - uses: extractions/setup-just@v4
+
+      - name: Create a project from the template
+        env:
+          DOTFILES: ${{ github.workspace }}
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@example.com"
+          git config --global init.defaultBranch main
+          bash bin/newproj demo-app "$RUNNER_TEMP"
+
+      - name: Every recipe the template's docs promise exists
+        working-directory: ${{ runner.temp }}/demo-app
+        run: |
+          for r in install dev test lint fmt check eval db docker; do
+            just --summary | tr ' ' '\n' | grep -qx "$r" || { echo "::error::justfile has no '$r' recipe"; exit 1; }
+          done
+
+      - name: just check
+        working-directory: ${{ runner.temp }}/demo-app
+        run: just check

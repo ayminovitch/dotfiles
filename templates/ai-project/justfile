@@ -1,0 +1,44 @@
+# Project commands. Run `just` to list them.
+set dotenv-load := true
+
+default:
+    @just --list
+
+# Install / update dependencies
+install:
+    uv sync
+
+# Run the API with auto-reload on http://localhost:8000
+dev:
+    uv run uvicorn __PKG__.main:app --reload
+
+# Run tests
+test:
+    uv run pytest
+
+# Lint, format check and type check
+lint:
+    uv run ruff check .
+    uv run ruff format --check .
+    uv run mypy src
+
+# Auto-fix lint issues and format code
+fmt:
+    uv run ruff check --fix .
+    uv run ruff format .
+
+# Everything CI runs, use it before every push
+check: lint test
+
+# Quality evals against the real model in LLM_MODEL (hosted models cost money). Example: just eval -k capital
+eval *args:
+    uv run pytest evals {{args}}
+
+# Start Postgres + pgvector in the background
+db:
+    docker compose up -d db
+
+# Build and run the production image locally (API keys come from your environment, i.e. the Keychain)
+docker:
+    docker build -t __PROJECT__ .
+    docker run --rm -p 8000:8000 --env-file .env -e GEMINI_API_KEY -e GROQ_API_KEY -e OPENROUTER_API_KEY -e OPENAI_API_KEY -e ANTHROPIC_API_KEY __PROJECT__

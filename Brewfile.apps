@@ -1,0 +1,16 @@
+# The apps I use every day. Nothing in the setup depends on them, so swap in your own.
+#
+#   brew bundle --file ~/dotfiles/Brewfile.apps
+
+cask "warp"
+cask "raycast"
+cask "claude"
+cask "chatgpt"
+cask "google-chrome"
+cask "notion"
+cask "postman"
+cask "jetbrains-toolbox"
+cask "termius"
+cask "utm"
+cask "unnaturalscrollwheels"
+cask "vorssaint"

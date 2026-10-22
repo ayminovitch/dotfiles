@@ -1,0 +1,36 @@
+# Local development services. Start the database only:  just db
+# Full stack (API + database):                           docker compose up --build
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://app:app@db:5432/__PKG__
+      # Reach Ollama running on the Mac from inside the container
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app   # local development only
+      POSTGRES_DB: __PKG__
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d __PKG__"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

@@ -1,0 +1,51 @@
+# Shared git settings, included from ~/.gitconfig with:
+#   git config --global include.path ~/dotfiles/git/gitconfig
+# Your name, email and signing key stay in ~/.gitconfig (not in this repo).
+
+[init]
+	defaultBranch = main
+[core]
+	editor = code --wait
+	excludesFile = ~/dotfiles/git/gitignore_global
+	autocrlf = input
+	pager = delta
+[interactive]
+	diffFilter = delta --color-only
+[delta]
+	navigate = true          # n / N jump between files in a diff
+	line-numbers = true
+	side-by-side = false     # set true for PyCharm-style split diffs
+[pull]
+	rebase = true
+[push]
+	autoSetupRemote = true
+	followTags = true
+[fetch]
+	prune = true
+	pruneTags = true
+[rebase]
+	autoStash = true
+	updateRefs = true
+[rerere]
+	enabled = true
+[merge]
+	conflictStyle = zdiff3
+[diff]
+	algorithm = histogram
+	colorMoved = default
+[commit]
+	verbose = true
+[branch]
+	sort = -committerdate
+[tag]
+	sort = version:refname
+[help]
+	autocorrect = prompt
+[alias]
+	st = status -sb
+	lg = log --graph --pretty=format:'%C(yellow)%h%Creset %s %C(green)(%cr)%Creset %C(blue)<%an>%Creset%C(auto)%d' -20
+	last = log -1 --stat
+	amend = commit --amend --no-edit
+	undo = reset --soft HEAD~1
+	branches = branch -a --sort=-committerdate
+	wip = !git add -A && git commit -m 'wip' --no-verify

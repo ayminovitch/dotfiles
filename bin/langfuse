@@ -1,0 +1,108 @@
+#!/bin/bash
+# langfuse: a local Langfuse (dashboard of every LLM call: prompt, answer, tokens, cost,
+# latency) running in Docker, only reachable from this Mac.
+#
+#   langfuse up       start it (the first run downloads the official setup and makes keys)
+#   langfuse keys     print the 3 lines to paste into a project's .env
+#   langfuse down     stop it, data is kept
+#   langfuse status   show the containers
+#   langfuse update   pull the latest setup and images, then restart
+#
+# It takes 2-3 GB of RAM while it runs, so stop it when you're done.
+set -euo pipefail
+
+DIR="$HOME/.local/share/langfuse"
+URL="https://raw.githubusercontent.com/langfuse/langfuse/main/docker-compose.yml"
+compose() { docker compose -p langfuse --project-directory "$DIR" -f "$DIR/docker-compose.yml" -f "$DIR/local.yml" "$@"; }
+
+need_docker() { docker info >/dev/null 2>&1 || { echo "Docker isn't running. Open OrbStack first."; exit 1; }; }
+
+download() {
+  mkdir -p "$DIR"
+  curl -fsSL "$URL" -o "$DIR/docker-compose.yml.new"
+  mv "$DIR/docker-compose.yml.new" "$DIR/docker-compose.yml"
+}
+
+setup() {
+  [ -f "$DIR/docker-compose.yml" ] || download
+
+  # Publish only the web UI and file storage, and only on 127.0.0.1 (the official file exposes
+  # some ports to your network and uses 5432, which your project databases need).
+  cat > "$DIR/local.yml" <<'EOF'
+services:
+  langfuse-web:
+    ports: !override
+      - 127.0.0.1:3000:3000
+  minio:
+    ports: !override
+      - 127.0.0.1:9090:9000
+  langfuse-worker:
+    ports: !reset []
+  clickhouse:
+    ports: !reset []
+  redis:
+    ports: !reset []
+  postgres:
+    ports: !reset []
+EOF
+
+  # Random secrets + a ready-made login and project API keys (created once)
+  if [ ! -f "$DIR/.env" ]; then
+    r() { openssl rand -hex "${1:-24}"; }
+    pg="$(r)"; minio="$(r)"
+    email="$(git config --global user.email 2>/dev/null || echo admin@localhost.dev)"
+    umask 077
+    cat > "$DIR/.env" <<EOF
+POSTGRES_PASSWORD=$pg
+DATABASE_URL=postgresql://postgres:$pg@postgres:5432/postgres
+SALT=$(r)
+ENCRYPTION_KEY=$(r 32)
+NEXTAUTH_SECRET=$(r)
+CLICKHOUSE_PASSWORD=$(r)
+REDIS_AUTH=$(r)
+MINIO_ROOT_PASSWORD=$minio
+LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=$minio
+LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY=$minio
+LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY=$minio
+TELEMETRY_ENABLED=false
+LANGFUSE_INIT_ORG_ID=local
+LANGFUSE_INIT_ORG_NAME=Local
+LANGFUSE_INIT_PROJECT_ID=dev
+LANGFUSE_INIT_PROJECT_NAME=dev
+LANGFUSE_INIT_PROJECT_PUBLIC_KEY=pk-lf-$(r 16)
+LANGFUSE_INIT_PROJECT_SECRET_KEY=sk-lf-$(r 16)
+LANGFUSE_INIT_USER_EMAIL=$email
+LANGFUSE_INIT_USER_NAME=$(git config --global user.name 2>/dev/null || echo Admin)
+LANGFUSE_INIT_USER_PASSWORD=$(r 12)
+EOF
+  fi
+}
+
+val() { grep "^$1=" "$DIR/.env" | cut -d= -f2-; }
+
+keys() {
+  [ -f "$DIR/.env" ] || { echo "Run 'langfuse up' first."; exit 1; }
+  cat <<EOF
+# Paste into your project's .env to trace every LLM call:
+LANGFUSE_PUBLIC_KEY=$(val LANGFUSE_INIT_PROJECT_PUBLIC_KEY)
+LANGFUSE_SECRET_KEY=$(val LANGFUSE_INIT_PROJECT_SECRET_KEY)
+LANGFUSE_HOST=http://localhost:3000
+
+# Dashboard login (http://localhost:3000):
+#   email:    $(val LANGFUSE_INIT_USER_EMAIL)
+#   password: $(val LANGFUSE_INIT_USER_PASSWORD)
+EOF
+}
+
+case "${1:-}" in
+  up)
+    need_docker; setup
+    compose up -d
+    echo "Starting… the dashboard is ready in about a minute at http://localhost:3000"
+    echo; keys ;;
+  keys)   keys ;;
+  down)   need_docker; compose down ;;
+  status) need_docker; compose ps ;;
+  update) need_docker; download; setup; compose pull; compose up -d ;;
+  *) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac

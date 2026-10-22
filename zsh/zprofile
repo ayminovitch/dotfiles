@@ -1,0 +1,5 @@
+# ~/.zprofile — managed in ~/dotfiles/zsh/zprofile
+# Runs once per login shell (every new Terminal/Warp tab on macOS).
+
+# Homebrew: PATH, MANPATH and completion folders
+eval "$(/opt/homebrew/bin/brew shellenv)"

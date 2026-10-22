@@ -1,0 +1,52 @@
+#!/bin/bash
+# dotup: update everything this repo installs, then run ai-doctor. I run it once a week.
+set -uo pipefail
+
+DOTFILES="${DOTFILES:-$HOME/dotfiles}"
+bold=$'\033[1m'; green=$'\033[32m'; yellow=$'\033[33m'; reset=$'\033[0m'
+step() { printf '\n%s== %s%s\n' "$bold" "$*" "$reset"; }
+ok()   { printf '%s✓%s %s\n' "$green" "$reset" "$*"; }
+warn() { printf '%s!%s %s\n' "$yellow" "$reset" "$*"; }
+
+step "dotfiles"
+if git -C "$DOTFILES" remote get-url origin >/dev/null 2>&1; then
+  if git -C "$DOTFILES" pull --rebase --autostash --quiet; then ok "up to date with GitHub"
+  else warn "couldn't pull, check 'git -C ~/dotfiles status'"; fi
+else
+  warn "no git remote yet"
+fi
+
+step "Homebrew"
+brew update --quiet
+brew bundle --file "$DOTFILES/Brewfile" --no-upgrade && ok "everything in Brewfile is installed"
+[ -f "$DOTFILES/Brewfile.apps" ] && brew bundle --file "$DOTFILES/Brewfile.apps" --no-upgrade >/dev/null && ok "apps from Brewfile.apps"
+brew upgrade && ok "upgraded"
+brew cleanup --prune=30 && ok "old versions removed"
+
+step "Python"
+uv python upgrade && ok "Python patch releases"
+uv tool upgrade --all && ok "uv tools"
+
+step "Agents"
+if [ -x "$HOME/.local/bin/claude" ]; then claude update && ok "Claude Code"; fi
+command -v gemini >/dev/null && ok "Gemini CLI $(gemini --version 2>/dev/null) (Homebrew updates it)"
+"$DOTFILES/bin/agent-sync"
+
+step "VS Code"
+code="$(command -v code || echo "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code")"
+if [ -x "$code" ]; then
+  "$code" --update-extensions >/dev/null 2>&1 && ok "extensions updated"
+  "$DOTFILES/bin/vscode-sync"
+fi
+
+step "Ollama models"
+if curl -fsS --max-time 2 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+  for m in $(ollama list | awk 'NR > 1 { print $1 }'); do
+    if ollama pull "$m" >/dev/null 2>&1; then ok "$m"; else warn "couldn't update $m"; fi
+  done
+else
+  warn "Ollama isn't running, skipped (brew services start ollama)"
+fi
+
+step "Health check"
+"$DOTFILES/bin/ai-doctor"

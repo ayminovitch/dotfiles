@@ -1,0 +1,66 @@
+[project]
+name = "__PROJECT__"
+version = "0.1.0"
+description = "TODO: one-line description of what this project does"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic-settings>=2.4",
+    "httpx>=0.27",
+    "litellm>=1.50",  # one API for OpenAI, Anthropic, Gemini and Ollama
+    "opentelemetry-sdk>=1.30",  # tracing to Langfuse (only active when its keys are set)
+    "opentelemetry-exporter-otlp-proto-http>=1.30",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "httpx2>=2.16",  # HTTP client used by FastAPI's TestClient
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pre-commit>=3.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/__PKG__"]
+
+# ── Lint & format ────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",   # pycodestyle + pyflakes
+    "I",             # import sorting
+    "UP",            # modern Python syntax
+    "B",             # likely bugs
+    "SIM",           # simplifications
+    "S",             # security (bandit)
+    "ASYNC",         # async pitfalls
+    "RUF",           # ruff-specific
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]   # asserts and fake secrets are fine in tests
+"evals/**" = ["S101"]
+
+# ── Types ────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["litellm", "litellm.*"]
+ignore_missing_imports = true
+
+# ── Tests ────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

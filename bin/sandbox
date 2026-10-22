@@ -1,0 +1,44 @@
+#!/bin/bash
+# sandbox: open a repo I don't trust in a throwaway container instead of on the Mac.
+#
+#   sandbox https://github.com/someone/take-home.git     Node image (default)
+#   sandbox https://bitbucket.org/x/y.git --py           Python image
+#   sandbox <url> -p 3000 -p 8000                        publish ports so you can open the app
+#
+# The container can't see your files, gets limited CPU and memory, and is deleted when you exit.
+# It does have internet access (to install packages), so don't type passwords or keys in it.
+set -euo pipefail
+
+die() { printf '\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
+
+[ $# -ge 1 ] || die "usage: sandbox <git-url> [--py] [--image IMAGE] [-p PORT]..."
+url="$1"; shift
+image="node:22-bookworm"
+ports=()
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --py)    image="python:3.12-bookworm" ;;
+    --image) shift; image="${1:?--image needs a value}" ;;
+    -p)      shift; ports+=("-p" "127.0.0.1:${1:?-p needs a port}:$1") ;;
+    *)       die "unknown option: $1" ;;
+  esac
+  shift
+done
+
+command -v docker >/dev/null || die "docker not found, start OrbStack first"
+docker info >/dev/null 2>&1 || die "Docker isn't running, open OrbStack"
+
+name="sandbox-$(date +%Y%m%d-%H%M%S)"
+printf "\033[33m⚠ Untrusted code in container %s (%s). Your Mac's files aren't visible in there.\033[0m\n" "$name" "$image"
+printf '\033[33m  Read config files before running anything (look for very long lines, eval, child_process, curl | sh).\033[0m\n\n'
+
+docker run --rm -it \
+  --name "$name" \
+  --hostname sandbox \
+  --memory 4g --cpus 2 --pids-limit 512 \
+  --security-opt no-new-privileges \
+  ${ports[@]+"${ports[@]}"} \
+  -e REPO_URL="$url" \
+  "$image" \
+  bash -c 'git clone --depth 1 "$REPO_URL" /work && cd /work && echo && echo "Repo is in /work. Type exit to destroy the sandbox." && exec bash'

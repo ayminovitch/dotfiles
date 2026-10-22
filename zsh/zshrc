@@ -1,0 +1,59 @@
+# ~/.zshrc, symlinked from ~/dotfiles/zsh/zshrc.
+# Anything specific to one machine (aliases, CODE_DIR, extra paths) goes in ~/.zshrc.local,
+# which isn't part of the repo. See zsh/zshrc.local.example.
+
+# Powerlevel10k instant prompt. Keep this near the top.
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+
+typeset -U path fpath   # no duplicate entries
+export DOTFILES="$HOME/dotfiles"
+
+# oh-my-zsh
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME="powerlevel10k/powerlevel10k"
+plugins=(git z zsh-autosuggestions zsh-syntax-highlighting fzf)
+ZSH_DISABLE_COMPFIX=true   # single-user Mac, skip the folder permission check
+
+# Completions need to be on fpath before oh-my-zsh runs compinit.
+# ~/.zfunc has the generated ones (uv, uvx).
+fpath+=~/.zfunc
+source ~/.orbstack/shell/init.zsh 2>/dev/null || :
+
+source $ZSH/oh-my-zsh.sh
+
+export EDITOR="code --wait"
+export VISUAL="$EDITOR"
+export OLLAMA_HOST="127.0.0.1:11434"   # keep Ollama off the network
+
+# Aliases go after oh-my-zsh so it can't override them
+alias gs="git status"
+alias ga="git add ."
+alias gc="git commit -m"
+alias gl="git log --oneline"
+alias cls="clear"
+alias ll="lsd -la"
+alias dc="docker compose"
+alias dcu="docker compose up"
+alias dcd="docker compose down"
+alias dcb="docker compose build"
+alias dcr="docker compose restart"
+alias venv="source .venv/bin/activate"
+
+# psql comes from keg-only libpq
+[[ -d /opt/homebrew/opt/libpq/bin ]] && path=(/opt/homebrew/opt/libpq/bin $path)
+
+# JetBrains Toolbox shell scripts, if turned on in Toolbox
+[[ -d "$HOME/Library/Application Support/JetBrains/Toolbox/scripts" ]] && \
+  path+=("$HOME/Library/Application Support/JetBrains/Toolbox/scripts")
+
+(( $+commands[direnv] )) && eval "$(direnv hook zsh)"
+
+# My scripts, then user-installed tools (Claude Code, uv tools), before everything else
+path=("$DOTFILES/bin" "$HOME/.local/bin" $path)
+
+[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+
+# Prompt last
+[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh

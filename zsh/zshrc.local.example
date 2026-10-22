@@ -1,0 +1,9 @@
+# Copy to ~/.zshrc.local and edit. zshrc sources it near the end; it's never committed.
+
+# Where your code lives. ai-doctor looks here for API keys left in .env files.
+export CODE_DIR="$HOME/Projects"
+# Where `newproj` creates new projects (defaults to CODE_DIR)
+# export NEWPROJ_DIR="$CODE_DIR/ai"
+
+# Your own shortcuts
+# alias p="cd $CODE_DIR"

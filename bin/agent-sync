@@ -1,0 +1,117 @@
+#!/bin/bash
+# Wire Claude Code and Gemini CLI up to this repo. bootstrap and dotup call it; running it
+# again is harmless.
+#
+# - both agents import agents/AGENTS.md (plus ~/.config/dotfiles/about-me.md if you have one)
+# - skills get symlinked into ~/.claude/skills and ~/.agents/skills
+# - claude/settings.json is merged into ~/.claude/settings.json. Deny rules and sandbox lists
+#   are added to yours, your own sandbox values win, and hooks/status line are only added if
+#   you don't have any yet
+# - Gemini reads AGENTS.md files and hides secret env vars from its commands
+# - subagents are copied to ~/.claude/agents
+#
+# Anything it overwrites gets a .backup-<timestamp> copy first.
+set -uo pipefail
+
+DOTFILES="${DOTFILES:-$HOME/dotfiles}"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+green=$'\033[32m'; yellow=$'\033[33m'; reset=$'\033[0m'
+tilde() { printf '%s' "${1/#"$HOME"/\~}"; }
+ok()   { printf '%s✓%s %s\n' "$green" "$reset" "$*"; }
+warn() { printf '%s!%s %s\n' "$yellow" "$reset" "$*"; }
+command -v jq >/dev/null || { warn "jq is missing (brew install jq), nothing changed"; exit 1; }
+chmod +x "$DOTFILES"/bin/* "$DOTFILES"/claude/*.sh "$DOTFILES"/claude/hooks/*.sh 2>/dev/null
+
+# write_json FILE JSON LABEL: write only if something changed. Returns 1 if FILE isn't valid JSON.
+write_json() {
+  local file="$1" new="$2" label="$3"
+  if [ -z "$new" ]; then warn "$label: $(tilde "$file") isn't valid JSON, left it alone"; return 1; fi
+  if [ -s "$file" ] && [ "$new" = "$(jq . "$file" 2>/dev/null)" ]; then ok "$label up to date"; return; fi
+  mkdir -p "$(dirname "$file")"
+  local note=""
+  if [ -s "$file" ]; then cp "$file" "$file.backup-$STAMP" && note=" (backup kept)"; fi
+  printf '%s\n' "$new" > "$file" && ok "$label updated$note"
+}
+
+# --- rules -------------------------------------------------------------------------
+about="$HOME/.config/dotfiles/about-me.md"
+imports=("@$DOTFILES/agents/AGENTS.md")
+[ -f "$about" ] && imports+=("@$about")
+for f in "$HOME/.claude/CLAUDE.md" "$HOME/.gemini/GEMINI.md"; do
+  mkdir -p "$(dirname "$f")"
+  added=0
+  for line in "${imports[@]}"; do
+    grep -qxF "$line" "$f" 2>/dev/null || { printf '%s\n' "$line" >> "$f" && added=1; }
+  done
+  if [ "$added" = 1 ]; then ok "$(tilde "$f") updated"; else ok "$(tilde "$f") up to date"; fi
+done
+[ -f "$about" ] || warn "No $(tilde "$about") yet. To tell the agents about yourself:
+    mkdir -p ~/.config/dotfiles && cp $(tilde "$DOTFILES")/agents/about-me.example.md $(tilde "$about")"
+
+# --- skills ------------------------------------------------------------------------
+linked=0
+for root in "$HOME/.claude/skills" "$HOME/.agents/skills"; do
+  mkdir -p "$root"
+  for dir in "$DOTFILES"/agents/skills/*/; do
+    src="${dir%/}"; dst="$root/$(basename "$src")"
+    if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then continue
+    elif [ -e "$dst" ] || [ -L "$dst" ]; then warn "Skipped $(tilde "$dst") (you already have a skill with that name)"
+    else ln -s "$src" "$dst" && linked=$((linked + 1)); fi
+  done
+  for dst in "$root"/*; do   # clean up links to skills that were deleted from the repo
+    [ -L "$dst" ] && [ ! -e "$dst" ] && [[ "$(readlink "$dst")" == "$DOTFILES/agents/skills/"* ]] \
+      && rm "$dst" && ok "Removed link to deleted skill $(basename "$dst")"
+  done
+done
+msg="$(find "$DOTFILES/agents/skills" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ') skills for both agents"
+[ "$linked" -gt 0 ] && msg+=" ($linked new link$([ "$linked" -gt 1 ] && echo s))"
+ok "$msg"
+
+# --- Claude Code settings ----------------------------------------------------------
+settings="$HOME/.claude/settings.json"
+ours="$DOTFILES/claude/settings.json"
+current='{}'; [ -s "$settings" ] && current="$(cat "$settings")"
+merged="$(jq -n --argjson cur "$current" --slurpfile ours "$ours" '
+  def uniqby(f): reduce .[] as $x ([]; if any(.[]; (. | f) == ($x | f)) then . else . + [$x] end);
+  def union($a; $b): (($a // []) + ($b // [])) | uniqby(.);
+  $ours[0] as $o
+  | $cur
+  | .permissions = ((.permissions // {})
+      + {ask: union(.permissions.ask; $o.permissions.ask),
+         deny: union(.permissions.deny; $o.permissions.deny)})
+  | (.sandbox // {}) as $us
+  | .sandbox = ($o.sandbox * $us)
+  | .sandbox.excludedCommands = union($us.excludedCommands; $o.sandbox.excludedCommands)
+  | .sandbox.network.allowedDomains = union($us.network.allowedDomains; $o.sandbox.network.allowedDomains)
+  | .sandbox.credentials.files = ((($us.credentials.files // []) + $o.sandbox.credentials.files) | uniqby(.path))
+  | .sandbox.credentials.envVars = ((($us.credentials.envVars // []) + $o.sandbox.credentials.envVars) | uniqby(.name))
+  | if .hooks then . else .hooks = $o.hooks end
+  | if .statusLine then . else .statusLine = $o.statusLine end
+' 2>/dev/null)"
+if write_json "$settings" "$merged" "Claude Code settings"; then
+  grep -q 'dotfiles/claude/hooks' "$settings" \
+    || warn "You already have Claude Code hooks, so mine weren't added (see $(tilde "$ours"))"
+  grep -q 'dotfiles/claude/statusline' "$settings" \
+    || warn "You already have a Claude Code status line, so mine wasn't added"
+fi
+
+# --- Gemini CLI ----------------------------------------------------------------------
+gsettings="$HOME/.gemini/settings.json"
+gcurrent='{}'; [ -s "$gsettings" ] && gcurrent="$(cat "$gsettings")"
+gmerged="$(jq -n --argjson cur "$gcurrent" '
+  $cur
+  | if .context.fileName then . else .context.fileName = ["AGENTS.md", "GEMINI.md"] end
+  | if .security.environmentVariableRedaction.enabled == null
+    then .security.environmentVariableRedaction.enabled = true else . end
+' 2>/dev/null)"
+write_json "$gsettings" "$gmerged" "Gemini CLI settings" \
+  || warn "  Add these yourself: context.fileName = [\"AGENTS.md\", \"GEMINI.md\"], security.environmentVariableRedaction.enabled = true"
+
+# --- subagents ----------------------------------------------------------------------
+mkdir -p "$HOME/.claude/agents"
+for f in "$DOTFILES"/claude/agents/*.md; do
+  dst="$HOME/.claude/agents/$(basename "$f")"
+  if cmp -s "$f" "$dst"; then ok "subagent $(basename "$f" .md) up to date"; continue; fi
+  [ -e "$dst" ] && cp "$dst" "$dst.backup-$STAMP"
+  cp "$f" "$dst" && ok "subagent $(basename "$f" .md) updated"
+done

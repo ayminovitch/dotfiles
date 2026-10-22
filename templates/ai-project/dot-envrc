@@ -1,0 +1,5 @@
+# direnv runs this when you cd into the project (after `direnv allow`; again after each edit).
+# Settings come from .env; API keys come from the macOS Keychain, never from a file:
+#   secret set ANTHROPIC_API_KEY     (once per key, for every project)
+dotenv_if_exists .env
+eval "$(secret env GEMINI_API_KEY GROQ_API_KEY OPENROUTER_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY)"

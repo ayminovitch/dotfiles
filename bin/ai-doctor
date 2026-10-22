@@ -1,0 +1,99 @@
+#!/bin/bash
+# ai-doctor: check that the whole setup is healthy. Read-only, safe to run any time.
+set -uo pipefail
+
+DOTFILES="${DOTFILES:-$HOME/dotfiles}"
+CODE_DIR="${CODE_DIR:-$HOME/Projects}"
+
+ok()    { printf '  \033[32m✓\033[0m %s\n' "$*"; }
+warn()  { printf '  \033[33m!\033[0m %s\n' "$*"; }
+bad()   { printf '  \033[31m✗\033[0m %s\n' "$*"; }
+title() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+ver()   { "$@" 2>/dev/null | head -1; }
+short() { printf '%s' "${1/#"$HOME"/\~}"; }
+
+title "Machine"
+ok "$(sw_vers -productName) $(sw_vers -productVersion) · $(sysctl -n machdep.cpu.brand_string) · $(( $(sysctl -n hw.memsize) / 1073741824 )) GB RAM"
+free_gb=$(df -g / | awk 'NR==2 {print $4}')
+if [ "${free_gb:-0}" -ge 100 ]; then ok "Free disk: ${free_gb} GB"; else warn "Free disk: ${free_gb} GB (try to keep 100 GB free)"; fi
+
+title "Security"
+if fdesetup status 2>/dev/null | grep -q "On"; then ok "FileVault on"; else bad "FileVault is off: System Settings > Privacy & Security"; fi
+if /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate 2>/dev/null | grep -q enabled; then ok "Firewall on"; else warn "Firewall off: System Settings > Network > Firewall"; fi
+if [ "$(git config --global commit.gpgsign 2>/dev/null)" = "true" ]; then ok "Signed git commits ($(git config --global gpg.format 2>/dev/null))"; else warn "Commits aren't signed: bash ~/dotfiles/scripts/new-ssh-key.sh"; fi
+if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then ok "GitHub CLI logged in"; else warn "GitHub CLI not logged in: gh auth login"; fi
+if [ -d /Applications/LuLu.app ]; then ok "LuLu installed"; else warn "LuLu missing: brew install --cask lulu, then open it once"; fi
+if brew list --cask blockblock >/dev/null 2>&1; then ok "BlockBlock installed"; else warn "BlockBlock missing: brew install --cask blockblock"; fi
+nkeys=$("$DOTFILES/bin/secret" list 2>/dev/null | wc -l | tr -d ' ')
+ok "API keys in the Keychain: ${nkeys:-0} (secret list)"
+
+# API keys still sitting in .env files. Only file names are printed, never values.
+if [ -d "$CODE_DIR" ]; then
+  plain=""
+  while IFS= read -r -d '' f; do
+    if grep -Ev '^[[:space:]]*#' "$f" 2>/dev/null | grep -Ev '^(export )?LANGFUSE_' \
+       | grep -Eq '^(export )?[A-Z0-9_]*(API_KEY|TOKEN|SECRET)[A-Z0-9_]*=[^[:space:]]'; then
+      plain="$plain\n      $(short "$f")"
+    fi
+  done < <(find "$CODE_DIR" -maxdepth 5 \( -name node_modules -o -name .venv -o -name vendor \) -prune \
+             -o -name '.env' -type f -print0 2>/dev/null)
+  if [ -z "$plain" ]; then ok "No API keys in .env files under $(short "$CODE_DIR")"
+  else warn "API keys in plain-text .env files (move them with 'secret set NAME' and .envrc):$(printf '%b' "$plain")"; fi
+else
+  warn "$(short "$CODE_DIR") doesn't exist. Set CODE_DIR in ~/.zshrc.local to where your code lives"
+fi
+
+title "Toolchain"
+for t in brew git uv node pnpm just direnv docker gitleaks; do
+  if command -v "$t" >/dev/null; then ok "$t $(ver "$t" --version | sed -E 's/^[^0-9]*//' | cut -c1-30)"; else bad "$t missing"; fi
+done
+if command -v uv >/dev/null; then
+  pys=$(uv python list --only-installed 2>/dev/null | awk '{print $1}' | sed -E 's/cpython-([0-9.]+).*/\1/' | sort -u | tr '\n' ' ')
+  ok "uv Pythons: ${pys:-none}"
+fi
+command -v pyenv >/dev/null && warn "pyenv is still installed, uv handles Python now (brew uninstall pyenv)"
+
+title "AI tools"
+if command -v claude >/dev/null; then ok "Claude Code $(ver claude --version)"; else bad "Claude Code missing: curl -fsSL https://claude.ai/install.sh | bash"; fi
+if command -v gemini >/dev/null; then ok "Gemini CLI $(ver gemini --version)"; else bad "Gemini CLI missing: brew install gemini-cli"; fi
+nskills=0; missing=""
+for d in "$DOTFILES"/agents/skills/*/; do
+  name="$(basename "$d")"
+  if [ -e "$HOME/.claude/skills/$name" ] && [ -e "$HOME/.agents/skills/$name" ]; then nskills=$((nskills + 1))
+  else missing="$missing $name"; fi
+done
+if [ -z "$missing" ]; then ok "Skills linked for both agents: $nskills"; else warn "Skills not linked:$missing (run agent-sync)"; fi
+claude_settings="$HOME/.claude/settings.json"
+if grep -q 'Read(.env)' "$claude_settings" 2>/dev/null; then ok "Claude Code can't read .env files"; else warn "Claude Code can read .env files (run agent-sync)"; fi
+if jq -e '.sandbox.enabled == true' "$claude_settings" >/dev/null 2>&1; then ok "Claude Code sandbox on"; else warn "Claude Code sandbox off (run agent-sync)"; fi
+if grep -q 'dotfiles/claude/hooks' "$claude_settings" 2>/dev/null; then ok "Claude Code hooks"; else warn "Claude Code hooks missing (run agent-sync)"; fi
+if grep -q '"statusLine"' "$claude_settings" 2>/dev/null; then ok "Claude Code status line"; else warn "No Claude Code status line (run agent-sync)"; fi
+if [ -f "$HOME/.claude/agents/reviewer.md" ]; then ok "reviewer subagent"; else warn "reviewer subagent missing (run agent-sync)"; fi
+if [ -f "$HOME/.config/dotfiles/about-me.md" ]; then ok "about-me.md loaded by both agents"; else warn "No ~/.config/dotfiles/about-me.md (see agents/about-me.example.md)"; fi
+gemini_settings="$HOME/.gemini/settings.json"
+if grep -q 'AGENTS.md' "$gemini_settings" 2>/dev/null; then ok "Gemini CLI reads AGENTS.md"; else warn "Gemini CLI ignores AGENTS.md (run agent-sync)"; fi
+if jq -e '.security.environmentVariableRedaction.enabled == true' "$gemini_settings" >/dev/null 2>&1; then
+  ok "Gemini CLI hides secret env vars from its commands"
+else warn "Gemini CLI passes API keys to its commands (run agent-sync)"; fi
+if curl -fsS --max-time 2 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+  models=$(curl -fsS http://127.0.0.1:11434/api/tags | grep -o '"name":"[^"]*"' | cut -d'"' -f4 | tr '\n' ' ')
+  ok "Ollama running, models: ${models:-none}"
+else
+  warn "Ollama isn't running: brew services start ollama"
+fi
+if docker info >/dev/null 2>&1; then ok "Docker running"; else warn "Docker isn't running: open OrbStack"; fi
+
+title "Editor"
+code_bin="$(command -v code || echo "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code")"
+if [ -x "$code_bin" ]; then ok "VS Code, $("$code_bin" --list-extensions 2>/dev/null | wc -l | tr -d ' ') extensions"; else bad "VS Code missing"; fi
+
+title "Leftovers"
+broken=0
+for f in "$HOME"/.local/bin/*; do
+  [ -e "$f" ] || { [ -L "$f" ] && { bad "broken link: $f"; broken=1; }; continue; }
+  first=$(head -c 200 "$f" 2>/dev/null | head -1 || true)
+  case "$first" in "#!/"*) interp="${first#\#!}"; interp="${interp%% *}"
+    [ -x "$interp" ] || { bad "broken script (missing $interp): $f"; broken=1; } ;; esac
+done
+[ "$broken" -eq 0 ] && ok "Nothing broken in ~/.local/bin"
+echo

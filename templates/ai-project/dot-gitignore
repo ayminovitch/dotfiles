@@ -1,0 +1,33 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Eval runs (keep only the baseline you compare against)
+evals/results/*
+!evals/results/baseline.json
+
+# Data & models (keep large files out of git)
+data/raw/
+*.gguf
+*.safetensors
+
+# OS / editors
+.DS_Store
+.idea/
+
+# Claude Code personal overrides
+.claude/settings.local.json

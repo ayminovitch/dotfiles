@@ -1,0 +1,47 @@
+# VS Code extensions. vscode-sync installs these and offers to remove anything else.
+# One ID per line, # starts a comment.
+
+# Python
+ms-python.python
+ms-python.vscode-pylance
+ms-python.debugpy
+ms-python.vscode-python-envs
+charliermarsh.ruff
+njpwerner.autodocstring
+
+# Data
+qwtel.sqlite-viewer
+
+# AI agents
+anthropic.claude-code
+
+# Containers & remote
+ms-azuretools.vscode-containers
+ms-vscode-remote.remote-containers
+ms-vscode-remote.remote-ssh
+
+# Config files
+tamasfe.even-better-toml
+redhat.vscode-yaml
+mikestead.dotenv
+editorconfig.editorconfig
+github.vscode-github-actions
+
+# Git
+eamodio.gitlens
+mhutchie.git-graph
+
+# HTTP / APIs
+humao.rest-client
+
+# JavaScript (frontends for AI apps)
+dbaeumer.vscode-eslint
+esbenp.prettier-vscode
+
+# PyCharm feel
+aymenhammami.archipelago-theme         # Archipelago Dark, my theme
+atommaterial.a-file-icon-vscode        # Atom Material Icons, same as in PyCharm
+k--kato.intellij-idea-keybindings      # PyCharm shortcuts
+
+# Productivity
+usernamehw.errorlens                   # errors and warnings at the end of the line
