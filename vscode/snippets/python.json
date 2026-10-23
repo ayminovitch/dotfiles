@@ -1,0 +1,86 @@
+{
+  // File templates, like PyCharm's New > Python File menu. In an empty file type "new", pick
+  // one, press Enter. The class name comes from the file name: tenant_status.py → TenantStatus.
+
+  "Class": {
+    "prefix": "newclass",
+    "body": [
+      "class ${1:${TM_FILENAME_BASE/(.*)/${1:/pascalcase}/}}:",
+      "    def __init__(self${2}) -> None:",
+      "        ${0:pass}",
+      ""
+    ],
+    "description": "Class with __init__"
+  },
+  "Dataclass": {
+    "prefix": "newdataclass",
+    "body": [
+      "from dataclasses import dataclass",
+      "",
+      "",
+      "@dataclass(frozen=True, slots=True)",
+      "class ${1:${TM_FILENAME_BASE/(.*)/${1:/pascalcase}/}}:",
+      "    ${2:name}: ${3:str}$0",
+      ""
+    ],
+    "description": "Frozen dataclass (value object)"
+  },
+  "Pydantic model": {
+    "prefix": "newmodel",
+    "body": [
+      "from pydantic import BaseModel",
+      "",
+      "",
+      "class ${1:${TM_FILENAME_BASE/(.*)/${1:/pascalcase}/}}(BaseModel):",
+      "    ${2:name}: ${3:str}$0",
+      ""
+    ],
+    "description": "Pydantic model"
+  },
+  "Enum": {
+    "prefix": "newenum",
+    "body": [
+      "from enum import StrEnum, auto",
+      "",
+      "",
+      "class ${1:${TM_FILENAME_BASE/(.*)/${1:/pascalcase}/}}(StrEnum):",
+      "    ${2:ACTIVE} = auto()$0",
+      ""
+    ],
+    "description": "String enum (values are the lowercase member names)"
+  },
+  "Interface (Protocol)": {
+    "prefix": "newinterface",
+    "body": [
+      "from typing import Protocol",
+      "",
+      "",
+      "class ${1:${TM_FILENAME_BASE/(.*)/${1:/pascalcase}/}}(Protocol):",
+      "    def ${2:method}(self${3}) -> ${4:None}: ...$0",
+      ""
+    ],
+    "description": "Interface as a typing.Protocol (structural, nothing has to inherit it)"
+  },
+  "Abstract class": {
+    "prefix": "newabstract",
+    "body": [
+      "from abc import ABC, abstractmethod",
+      "",
+      "",
+      "class ${1:${TM_FILENAME_BASE/(.*)/${1:/pascalcase}/}}(ABC):",
+      "    @abstractmethod",
+      "    def ${2:method}(self${3}) -> ${4:None}: ...$0",
+      ""
+    ],
+    "description": "Abstract base class"
+  },
+  "Exception": {
+    "prefix": "newexception",
+    "body": [
+      "class ${1:${TM_FILENAME_BASE/(.*)/${1:/pascalcase}/}}(${2:Exception}):",
+      "    \"\"\"${3:Raised when ...}\"\"\"$0",
+      ""
+    ],
+    "description": "Custom exception"
+  }
+}

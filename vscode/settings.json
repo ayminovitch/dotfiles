@@ -58,10 +58,10 @@
   // Terminal: a Nerd Font so the Powerlevel10k icons show up
   "terminal.integrated.fontFamily": "'MesloLGS Nerd Font', 'MesloLGS NF', Menlo, monospace",
   "terminal.integrated.fontSize": 14,
-  // Don't watch or search generated folders
+  // Don't watch or search generated folders. .venv stays watched so Pylance notices new packages
+  // right after `uv add` / `uv sync`.
   "files.watcherExclude": {
     "**/.git/objects/**": true,
-    "**/.venv/**": true,
     "**/node_modules/**": true,
     "**/.mypy_cache/**": true,
     "**/.ruff_cache/**": true,

@@ -51,7 +51,7 @@ Brewfile             CLI tools, Ollama, Gemini CLI, VS Code, OrbStack, LuLu, Blo
 Brewfile.apps        apps I use every day (optional)
 zsh/                 zshrc (oh-my-zsh + Powerlevel10k), zprofile, p10k config
 git/                 shared git config (delta for diffs, rebase on pull, zdiff3 conflicts)
-vscode/              settings and extension list, PyCharm-style look
+vscode/              settings, extensions, Python file templates, PyCharm-style look
 agents/              rules and skills for Claude Code and Gemini CLI
 claude/              Claude Code settings, hooks, status line, reviewer subagent
 templates/ai-project the Python project template used by newproj

@@ -178,8 +178,9 @@ fi
 step "VS Code"
 CODE="$(command -v code || echo "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code")"
 if [ -x "$CODE" ]; then
-  if ask "Use vscode/settings.json (your current settings get backed up)" Y; then
+  if ask "Use vscode/settings.json and the Python file templates (your current ones get backed up)" Y; then
     link "$DOTFILES/vscode/settings.json" "$HOME/Library/Application Support/Code/User/settings.json"
+    link "$DOTFILES/vscode/snippets/python.json" "$HOME/Library/Application Support/Code/User/snippets/python.json"
   fi
   if ask "Install the extensions in vscode/extensions.txt (and offer to remove the rest)" Y; then
     "$DOTFILES/bin/vscode-sync"
