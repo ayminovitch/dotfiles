@@ -1,0 +1,25 @@
+#!/bin/bash
+# charm: open a project in PyCharm from the terminal, like `code .` does for VS Code.
+#
+#   charm              the folder you're in
+#   charm ~/Work/app   another folder (or a single file)
+#
+# If the project is already open, PyCharm just brings its window forward. Set PYCHARM_APP in
+# ~/.zshrc.local if your app has another name (for example "PyCharm CE").
+set -euo pipefail
+
+app="${PYCHARM_APP:-PyCharm}"
+target="${1:-.}"
+[ -e "$target" ] || { printf 'charm: %s does not exist\n' "$target" >&2; exit 1; }
+
+# PyCharm needs an absolute path
+if [ -d "$target" ]; then
+  target="$(cd "$target" && pwd)"
+else
+  target="$(cd "$(dirname "$target")" && pwd)/$(basename "$target")"
+fi
+
+# -n starts a new launcher even when PyCharm is running; it hands the path to the open app and
+# quits. That's how JetBrains' own command-line launcher does it on macOS.
+open -na "$app" --args "$target" 2>/dev/null \
+  || { printf 'charm: no app called "%s" (install PyCharm with JetBrains Toolbox)\n' "$app" >&2; exit 1; }

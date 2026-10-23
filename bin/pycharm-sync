@@ -1,0 +1,211 @@
+#!/bin/bash
+# pycharm-sync: make PyCharm's plugins match jetbrains/plugins.txt, the way vscode-sync does for
+# VS Code extensions.
+#
+#   pycharm-sync          install what's missing, then ask before removing plugins not on the list
+#   pycharm-sync --yes    same, without asking (removed plugins go to the Trash)
+#   pycharm-sync --save   update the list from what's installed now (then commit it)
+#
+# A line in the list is a plugin's ID or the number in its Marketplace link
+# (plugins.jetbrains.com/plugin/27310-claude-code-beta- is 27310). Numbers get looked up online.
+# Plugins that ship with PyCharm, and anything a listed plugin depends on, are never removed.
+#
+# Settings (theme, keymap, code style, actions on save) aren't in this repo. PyCharm's built-in
+# Backup and Sync keeps them in your JetBrains account and carries them across version upgrades,
+# which config files in git can't do reliably.
+set -uo pipefail
+export LC_ALL=C   # sort and comm have to agree on the order
+
+DOTFILES="${DOTFILES:-$HOME/dotfiles}"
+LIST="$DOTFILES/jetbrains/plugins.txt"
+NAME="${PYCHARM_APP:-PyCharm}"
+MODE="${1:-}"
+
+green=$'\033[32m'; yellow=$'\033[33m'; bold=$'\033[1m'; reset=$'\033[0m'
+ok()   { printf '%s✓%s %s\n' "$green" "$reset" "$*"; }
+warn() { printf '%s!%s %s\n' "$yellow" "$reset" "$*"; }
+
+case "$MODE" in ""|--yes|--save) ;; *) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;; esac
+
+app=""
+for dir in /Applications "$HOME/Applications"; do
+  if [ -d "$dir/$NAME.app" ]; then app="$dir/$NAME.app"; break; fi
+done
+[ -n "$app" ] || { warn "$NAME.app not found (install it with JetBrains Toolbox)"; exit 1; }
+info="$app/Contents/Resources/product-info.json"
+
+# Plugins live in ~/Library/Application Support/JetBrains/<folder>/plugins, where the folder
+# changes with every version (PyCharm2026.2...). The app names it in product-info.json.
+folder="$(sed -n 's/.*"dataDirectoryName"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$info" 2>/dev/null | head -1)"
+[ -n "$folder" ] || { warn "can't tell where $NAME keeps its plugins"; exit 1; }
+config="${PYCHARM_CONFIG:-$HOME/Library/Application Support/JetBrains/$folder}"
+
+running() { pgrep -f "$app/Contents/MacOS/" >/dev/null 2>&1; }
+tag() { sed -n "s:.*<$1>[[:space:]]*\([^<]*[^<[:space:]]\)[[:space:]]*</$1>.*:\1:p" | head -1; }
+
+# One line per plugin you installed (not the ones that ship with PyCharm):
+#   id <tab> name <tab> path <tab> IDs it depends on
+# A plugin's ID is the <id> in its plugin.xml, or its <name> when it has no <id>.
+scan() {
+  local p jar xml id name deps
+  for p in "$config/plugins"/*; do
+    [ -e "$p" ] || continue
+    id=""
+    for jar in "$p" "$p"/lib/*.jar; do
+      case "$jar" in *.jar) [ -f "$jar" ] || continue ;; *) continue ;; esac
+      xml="$(unzip -p "$jar" META-INF/plugin.xml 2>/dev/null)"
+      name="$(printf '%s\n' "$xml" | tag name)"
+      id="$(printf '%s\n' "$xml" | tag id)"
+      id="${id:-$name}"
+      [ -n "$id" ] && break
+    done
+    [ -n "$id" ] || continue
+    deps="$( { printf '%s\n' "$xml" | grep -o '<depends[^>]*>[^<]*</depends>' | sed -e 's:<depends[^>]*>::' -e 's:</depends>::'
+               printf '%s\n' "$xml" | grep -o '<plugin id="[^"]*"' | sed -e 's:<plugin id="::' -e 's:"$::'
+             } | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep . | tr '\n' ' ')"
+    printf '%s\t%s\t%s\t%s\n' "$id" "${name:-$id}" "$p" "$deps"
+  done
+}
+
+# IDs of the plugins you installed and haven't disabled
+installed() {
+  scan | cut -f1 | sort -u | grep -vxF -f <(cat "$config/disabled_plugins.txt" 2>/dev/null; echo '#none#')
+}
+
+# IDs of the plugins that ship inside the app. If you update one of them, the update lands next to
+# your own plugins, and it must not be offered for removal.
+bundled() {
+  jq -r '(.bundledPlugins // [])[], ((.layout // [])[] | select(.kind == "plugin" or .kind == "pluginAlias") | .name)' \
+    "$info" 2>/dev/null | sort -u
+}
+
+# Turn Marketplace numbers into plugin IDs; IDs pass through. Prints nothing for a number it
+# can't look up (no internet), so callers can tell.
+resolve() {
+  local line id
+  while IFS= read -r line; do
+    case "$line" in
+      *[!0-9]*) printf '%s\n' "$line"; continue ;;
+    esac
+    id="$(curl -fsSL --max-time 15 "https://plugins.jetbrains.com/api/plugins/$line" 2>/dev/null \
+      | grep -o '"xmlId"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+    [ -n "$id" ] || id="$(curl -fsSL --max-time 15 "https://plugins.jetbrains.com/plugins/list?pluginId=$line" 2>/dev/null \
+      | grep -o '<id>[^<]*</id>' | head -1 | sed -e 's:<id>::' -e 's:</id>::')"
+    if [ -n "$id" ]; then printf '%s\n' "$id"; else warn "couldn't look up Marketplace plugin $line (offline?)" >&2; fi
+  done
+}
+
+entry() { sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+
+# --save: rewrite the list from what's installed, keeping comments and the notes on each line
+if [ "$MODE" = "--save" ]; then
+  mkdir -p "$(dirname "$LIST")"
+  [ -f "$LIST" ] || printf '# PyCharm plugins: an ID or a Marketplace number per line. See bin/pycharm-sync.\n' > "$LIST"
+  have="$(installed)"
+  kept=""
+  unchecked=0
+  {
+    while IFS= read -r line; do
+      raw="$(printf '%s\n' "$line" | entry)"
+      if [ -z "$raw" ]; then printf '%s\n' "$line"; continue; fi
+      id="$(printf '%s\n' "$raw" | resolve 2>/dev/null)"
+      if [ -z "$id" ]; then printf '%s\n' "$line"; unchecked=1; continue; fi   # can't check, keep it
+      if printf '%s\n' "$have" | grep -qxF "$id"; then printf '%s\n' "$line"; kept="$kept$id"$'\n'; fi
+    done < "$LIST"
+    # Then whatever is installed but not listed yet (only when every entry could be checked,
+    # otherwise a plugin that's already listed by number would be added twice)
+    if [ "$unchecked" = 0 ] && [ -n "$have" ]; then
+      comm -23 <(printf '%s\n' "$have") <(printf '%s' "$kept" | sort -u)
+    fi
+  } > "$LIST.tmp" && mv "$LIST.tmp" "$LIST"
+  ok "saved $(entry < "$LIST" | grep -c .) plugins to ${LIST/#"$HOME"/\~}"
+  [ "$unchecked" = 0 ] || warn "couldn't reach the Marketplace, so new plugins weren't added. Run it again online"
+  exit 0
+fi
+
+entries="$([ -f "$LIST" ] && entry < "$LIST" | grep .)"
+if [ -z "$entries" ]; then
+  # An empty list would make every plugin "extra", so stop here
+  warn "jetbrains/plugins.txt is empty. Install your plugins in PyCharm, then run: pycharm-sync --save"
+  exit 0
+fi
+resolved="$(printf '%s\n' "$entries" | resolve)"
+failed=$(( $(printf '%s\n' "$entries" | grep -c .) - $(printf '%s\n' "$resolved" | grep -c .) ))
+want="$(printf '%s\n' "$resolved" | grep . | sort -u)"
+status=0
+
+# 1. Install what's missing
+missing=""
+[ -z "$want" ] || missing="$(comm -23 <(printf '%s\n' "$want") <(installed))"
+if [ -n "$missing" ]; then
+  if running; then
+    warn "Quit PyCharm first (Cmd+Q). It can't install plugins while it's open. Missing:"
+    printf '%s\n' "$missing" | sed 's/^/  /'
+    exit 1
+  fi
+  ids=()
+  while IFS= read -r id; do ids+=("$id"); done <<< "$missing"
+  launcher="$(find "$app/Contents/MacOS" -maxdepth 1 -type f -perm -u+x | head -1)"
+  printf 'Installing %s plugin(s), this takes a minute...\n' "${#ids[@]}"
+  "$launcher" installPlugins "${ids[@]}" >/dev/null 2>&1
+  left="$(comm -23 <(printf '%s\n' "$missing") <(installed))"
+  for id in "${ids[@]}"; do
+    if printf '%s\n' "$left" | grep -qxF "$id"; then warn "couldn't install $id"; status=1; else ok "installed $id"; fi
+  done
+fi
+
+# 2. Offer to remove the rest. Not when part of the list couldn't be looked up: those plugins
+#    would look like extras.
+if [ "$failed" -gt 0 ]; then
+  warn "$failed plugin(s) couldn't be checked, so nothing was removed. Try again when you're online"
+  exit 1
+fi
+if ! command -v jq >/dev/null; then
+  warn "jq is needed to tell PyCharm's own plugins apart (brew install jq), so nothing was removed"
+  exit "$status"
+fi
+
+all="$(scan)"
+keep="$(printf '%s\n%s\n' "$want" "$(bundled)" | grep . | sort -u)"
+# Keep what the listed plugins depend on (a few passes covers dependencies of dependencies)
+for _ in 1 2 3; do
+  deps="$(printf '%s\n' "$all" | while IFS=$'\t' read -r id _ _ d; do
+    [ -n "$id" ] && printf '%s\n' "$keep" | grep -qxF "$id" && printf '%s\n' "$d" | tr ' ' '\n'
+  done)"
+  keep="$(printf '%s\n%s\n' "$keep" "$deps" | grep . | sort -u)"
+done
+extra="$(printf '%s\n' "$all" | while IFS=$'\t' read -r id name path _; do
+  [ -n "$id" ] && ! printf '%s\n' "$keep" | grep -qxF "$id" && printf '%s\t%s\t%s\n' "$id" "$name" "$path"
+done)"
+
+if [ -z "$extra" ]; then
+  [ "$status" = 0 ] && ok "PyCharm plugins match plugins.txt"
+  exit "$status"
+fi
+
+count="$(printf '%s\n' "$extra" | grep -c .)"
+printf '\n%sInstalled but not in plugins.txt:%s\n' "$bold" "$reset"
+printf '%s\n' "$extra" | while IFS=$'\t' read -r id name _; do printf '  %s (%s)\n' "$name" "$id"; done
+echo "  (to keep one, add its ID to jetbrains/plugins.txt and run pycharm-sync again)"
+
+if running; then
+  warn "Quit PyCharm (Cmd+Q) and run pycharm-sync again to remove them"
+  exit 1
+fi
+if [ "$MODE" != "--yes" ]; then
+  if ! ( : </dev/tty ) 2>/dev/null; then
+    warn "no terminal to ask in, so nothing was removed (pycharm-sync --yes skips the question)"
+    exit 1
+  fi
+  read -r -p "Move these $count plugins to the Trash? [Y/n] " reply </dev/tty
+  case "${reply:-Y}" in [Yy]*) ;; *) exit "$status" ;; esac
+fi
+
+# Removing a plugin is deleting its folder while PyCharm is closed. The Trash keeps it, just in case.
+stamp="$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$HOME/.Trash"
+while IFS=$'\t' read -r id name path; do
+  [ -n "$id" ] || continue
+  if mv "$path" "$HOME/.Trash/$(basename "$path")-$stamp"; then ok "removed $name"; else warn "couldn't remove $name"; status=1; fi
+done <<< "$extra"
+exit "$status"

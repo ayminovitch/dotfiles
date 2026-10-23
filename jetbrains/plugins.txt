@@ -1,0 +1,12 @@
+# PyCharm plugins, one per line: a plugin ID, or the number in its Marketplace link
+# (plugins.jetbrains.com/plugin/27310-claude-code-beta- is 27310). pycharm-sync installs them,
+# and pycharm-sync --save updates this list from PyCharm while keeping these notes.
+#
+# Kept short on purpose: every plugin costs memory and indexing time on a 16 GB laptop.
+# Ruff, Pydantic, Jupyter, TOML, Markdown, Git and GitHub support already ship with PyCharm.
+
+27310   # Claude Code: Claude's edits open as IDE diffs, and it sees your selection (needs the claude CLI)
+33482   # direnv Everywhere: Run/Debug gets the project's .envrc, so Keychain API keys work outside the terminal
+18658   # Just: run justfile recipes (just dev, just check) from the gutter
+com.intellij.plugins.vscodekeymap   # VS Code shortcuts, so both editors use the same keys
+com.mallowigi               # Atom Material Icons: clearer file and folder icons

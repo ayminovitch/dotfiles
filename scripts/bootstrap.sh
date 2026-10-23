@@ -189,6 +189,17 @@ else
   warn "VS Code not found"
 fi
 
+step "PyCharm"
+pycharm="${PYCHARM_APP:-PyCharm}.app"
+if [ -d "/Applications/$pycharm" ] || [ -d "$HOME/Applications/$pycharm" ]; then
+  if ask "Install the PyCharm plugins in jetbrains/plugins.txt (and offer to remove the rest)" Y; then
+    "$DOTFILES/bin/pycharm-sync"
+  fi
+  info "For PyCharm's settings, sign in to your JetBrains account and turn on Settings > Backup and Sync"
+else
+  info "PyCharm isn't installed (JetBrains Toolbox in Brewfile.apps installs it), skipping"
+fi
+
 step "Projects folder"
 projects="${NEWPROJ_DIR:-${CODE_DIR:-$HOME/Projects}}"
 mkdir -p "$projects" && ok "$projects (newproj creates projects here, change it in ~/.zshrc.local)"

@@ -39,6 +39,12 @@ if [ -x "$code" ]; then
   "$DOTFILES/bin/vscode-sync"
 fi
 
+pycharm="${PYCHARM_APP:-PyCharm}.app"
+if [ -d "/Applications/$pycharm" ] || [ -d "$HOME/Applications/$pycharm" ]; then
+  step "PyCharm"
+  "$DOTFILES/bin/pycharm-sync"
+fi
+
 step "Ollama models"
 if curl -fsS --max-time 2 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
   for m in $(ollama list | awk 'NR > 1 { print $1 }'); do

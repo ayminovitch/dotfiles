@@ -82,10 +82,10 @@
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
   "python.terminal.activateEnvironment": true,
   "python.analysis.typeCheckingMode": "standard",
-  // "full" makes Pylance index like PyCharm: auto-import suggestions for your own code and for
-  // submodules of installed packages (e.g. DeclarativeBase from sqlalchemy.orm). Uses more RAM;
-  // switch back to "default" if a huge project gets slow.
-  "python.analysis.languageServerMode": "full",
+  // "default" keeps Pylance light and easy on the battery. "full" indexes more like PyCharm
+  // (auto-imports for your own code and for package submodules such as sqlalchemy.orm) but
+  // works the CPU much harder. I write Python in PyCharm now, so VS Code stays on "default".
+  "python.analysis.languageServerMode": "default",
   "python.analysis.autoImportCompletions": true,
   "python.analysis.inlayHints.functionReturnTypes": false, // full mode turns these on, PyCharm doesn't
   "python.analysis.inlayHints.pytestParameters": false,

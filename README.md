@@ -52,6 +52,7 @@ Brewfile.apps        apps I use every day (optional)
 zsh/                 zshrc (oh-my-zsh + Powerlevel10k), zprofile, p10k config
 git/                 shared git config (delta for diffs, rebase on pull, zdiff3 conflicts)
 vscode/              settings, extensions, Python file templates, PyCharm-style look
+jetbrains/           PyCharm plugin list
 agents/              rules and skills for Claude Code and Gemini CLI
 claude/              Claude Code settings, hooks, status line, reviewer subagent
 templates/ai-project the Python project template used by newproj
@@ -72,6 +73,39 @@ macos/defaults.sh    a few Finder and keyboard tweaks (optional)
 | `sandbox <git-url>` | open a repo I don't trust in a throwaway container |
 | `langfuse up` | local dashboard of every LLM call |
 | `vscode-sync` | make VS Code's extensions match `extensions.txt` |
+| `charm .` | open the current folder in PyCharm |
+| `pycharm-sync` | make PyCharm's plugins match `jetbrains/plugins.txt` (`--save` to update the list) |
+
+## Editors
+
+I write Python in PyCharm and use VS Code for everything else. PyCharm indexes the project and
+every installed package, so it offers the import for any name as soon as I type it, which
+Pylance never quite matched.
+
+PyCharm comes from JetBrains Toolbox (in `Brewfile.apps`). Two parts keep it the same on every
+Mac:
+
+- plugins: `jetbrains/plugins.txt`, a short list with a note on why each one is there. A line
+  is a plugin ID or the number from its Marketplace link. `pycharm-sync` installs what's missing
+  and asks before moving any other plugin to the Trash (never PyCharm's own, or ones a listed
+  plugin needs). Quit PyCharm first, it can't change plugins while it's open. After adding or
+  removing one in PyCharm, `pycharm-sync --save` updates the list and keeps the notes
+- settings (theme, keymap, code style, actions on save): Settings → Backup and Sync, signed in
+  with a JetBrains account, with its Plugins box unticked so it doesn't fight `plugins.txt`
+  (a plugin removed while it syncs plugins also gets disabled in your other JetBrains IDEs).
+  I keep settings out of git on purpose: PyCharm rewrites its config files, and their folder
+  changes with every version
+
+For a project made with `newproj`:
+
+- open it with `charm .`. PyCharm usually finds the project's `.venv` on its own; if not, click
+  the interpreter in the status bar and add the existing one
+- Ruff: Settings → Python → Tools → External Tools, turn Ruff on with formatting and import
+  sorting, then Settings → Tools → Actions on Save → Reformat code and Optimize imports
+- Claude Code: the Claude Code plugin from the Marketplace, or just `claude` in the terminal tab.
+  So Esc reaches Claude instead of jumping to the editor: Settings → Tools → Terminal, untick
+  "Move focus to the editor with Escape"
+- on battery: File → Power Save Mode pauses background inspections until you turn it off
 
 ## Coding agents
 
@@ -126,7 +160,8 @@ LLM_MODEL=openrouter/<vendor>/<model>:free   # OpenRouter free models
 I treat my laptop as a target, because developers are one:
 
 - unknown repos (take-home tests from strangers especially) get `repo-audit` first and only ever
-  run inside `sandbox`; VS Code won't auto-run tasks when a folder opens
+  run inside `sandbox`; VS Code won't auto-run tasks when a folder opens, and PyCharm asks
+  before trusting a new project
 - API keys live in the Keychain, not in files; `ai-doctor` flags any `.env` that still has one
 - gitleaks runs before every commit, and commits are signed with an SSH key
   (`scripts/new-ssh-key.sh`)

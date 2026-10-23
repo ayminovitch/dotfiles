@@ -65,7 +65,7 @@ cat <<EOF
 ✓ $name is ready in $dest
 
   cd $dest
-  code .        open it in VS Code
+  charm .       open it in PyCharm (or code . for VS Code)
   just dev      API on http://localhost:8000/docs
   just db       Postgres + pgvector
   claude        or gemini, both read AGENTS.md
