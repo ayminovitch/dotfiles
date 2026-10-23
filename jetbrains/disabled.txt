@@ -1,0 +1,70 @@
+# Built-in PyCharm plugins to keep switched off, one ID per line. pycharm-sync switches them off
+# (with PyCharm closed), and pycharm-sync --save updates this list from PyCharm's Plugins screen
+# while keeping these notes. Python, and the SSH plugin it needs, are never switched off.
+#
+# Less to load, index and keep in memory on a 16 GB laptop. PyCharm is for Python here.
+
+# Front end: JavaScript work happens in WebStorm or VS Code
+JavaScript                                   # JavaScript and TypeScript
+JavaScriptDebugger
+JSIntentionPowerPack
+NodeJS
+org.jetbrains.plugins.node-remote-interpreter
+AngularJS
+com.intellij.react
+org.jetbrains.plugins.vue
+intellij.nextjs
+intellij.vitejs
+intellij.webpack
+Karma
+jshint
+tslint
+intellij.javascript.eslint
+intellij.prettierJS
+com.intellij.plugins.webcomponents           # Polymer & Web Components
+com.deadlock.scsyntax                        # Styled Components & Styled JSX
+com.intellij.stylelint
+com.intellij.css
+org.jetbrains.plugins.less
+org.jetbrains.plugins.sass
+org.intellij.plugins.postcss
+com.intellij.tailwindcss
+HtmlTools
+
+# Language packs
+com.intellij.zh
+com.intellij.ja
+com.intellij.ko
+
+# Remote work: everything runs on this Mac
+com.jetbrains.remoteDevelopment
+com.jetbrains.gateway
+com.jetbrains.remoteDevServer
+org.jetbrains.plugins.docker.gateway         # Dev Containers
+org.jetbrains.plugins.remote-run             # SSH Remote Run (needs FTP/SFTP, which is off too)
+com.jetbrains.station
+com.jetbrains.plugins.webDeployment          # FTP/SFTP/WebDAV
+
+# Python extras I don't use (FastAPI, not Django)
+com.intellij.python.django
+com.jetbrains.python.pyscript
+intellij.jupyter.colab
+org.jetbrains.plugins.rest                   # reStructuredText
+
+# JetBrains AI Assistant: a paid subscription, and Claude Code does that job
+com.intellij.ml.llm
+
+# Extras
+com.intellij.dev                             # DevKit Runtime
+training                                     # IDE Features Trainer
+com.intellij.tasks                           # Issue Trackers
+com.intellij.platform.tasks                  # Tasks and Contexts
+com.intellij.tasks.timeTracking
+com.intellij.diagram
+com.intellij.plugins.watcher                 # File Watchers
+com.intellij.minimap
+intellij.git.commit.modal                    # Modal Commit Interface
+tanvd.grazi                                  # Natural Languages (grammar checks)
+com.jetbrains.performancePlugin              # Performance Diagnostics
+com.intellij.properties
+com.intellij.recentFiles

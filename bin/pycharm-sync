@@ -1,14 +1,17 @@
 #!/bin/bash
-# pycharm-sync: make PyCharm's plugins match jetbrains/plugins.txt, the way vscode-sync does for
-# VS Code extensions.
+# pycharm-sync: make PyCharm's plugins match jetbrains/, the way vscode-sync does for VS Code.
+#   plugins.txt    plugins to install
+#   disabled.txt   built-in plugins to keep switched off
 #
-#   pycharm-sync          install what's missing, then ask before removing plugins not on the list
+#   pycharm-sync          install what's missing, switch off what's in disabled.txt, then ask
+#                         before removing plugins that aren't on the list
 #   pycharm-sync --yes    same, without asking (removed plugins go to the Trash)
-#   pycharm-sync --save   update the list from what's installed now (then commit it)
+#   pycharm-sync --save   update both lists from PyCharm as it is now (then commit them)
 #
-# A line in the list is a plugin's ID or the number in its Marketplace link
+# A line in plugins.txt is a plugin's ID or the number in its Marketplace link
 # (plugins.jetbrains.com/plugin/27310-claude-code-beta- is 27310). Numbers get looked up online.
 # Plugins that ship with PyCharm, and anything a listed plugin depends on, are never removed.
+# Python (and the SSH plugin it uses) are never switched off, and get switched back on if they were.
 #
 # Settings (theme, keymap, code style, actions on save) aren't in this repo. PyCharm's built-in
 # Backup and Sync keeps them in your JetBrains account and carries them across version upgrades,
@@ -18,6 +21,9 @@ export LC_ALL=C   # sort and comm have to agree on the order
 
 DOTFILES="${DOTFILES:-$HOME/dotfiles}"
 LIST="$DOTFILES/jetbrains/plugins.txt"
+OFF_LIST="$DOTFILES/jetbrains/disabled.txt"
+# Never switched off: PyCharm's Python support, and the SSH plugin its remote interpreters use
+ESSENTIAL="Pythonid PythonCore com.intellij.platform.ssh"
 NAME="${PYCHARM_APP:-PyCharm}"
 MODE="${1:-}"
 
@@ -25,7 +31,7 @@ green=$'\033[32m'; yellow=$'\033[33m'; bold=$'\033[1m'; reset=$'\033[0m'
 ok()   { printf '%s✓%s %s\n' "$green" "$reset" "$*"; }
 warn() { printf '%s!%s %s\n' "$yellow" "$reset" "$*"; }
 
-case "$MODE" in ""|--yes|--save) ;; *) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;; esac
+case "$MODE" in ""|--yes|--save) ;; *) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;; esac
 
 app=""
 for dir in /Applications "$HOME/Applications"; do
@@ -39,6 +45,7 @@ info="$app/Contents/Resources/product-info.json"
 folder="$(sed -n 's/.*"dataDirectoryName"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$info" 2>/dev/null | head -1)"
 [ -n "$folder" ] || { warn "can't tell where $NAME keeps its plugins"; exit 1; }
 config="${PYCHARM_CONFIG:-$HOME/Library/Application Support/JetBrains/$folder}"
+off_file="$config/disabled_plugins.txt"   # PyCharm's own list of switched-off plugins
 
 running() { pgrep -f "$app/Contents/MacOS/" >/dev/null 2>&1; }
 tag() { sed -n "s:.*<$1>[[:space:]]*\([^<]*[^<[:space:]]\)[[:space:]]*</$1>.*:\1:p" | head -1; }
@@ -69,8 +76,10 @@ scan() {
 
 # IDs of the plugins you installed and haven't disabled
 installed() {
-  scan | cut -f1 | sort -u | grep -vxF -f <(cat "$config/disabled_plugins.txt" 2>/dev/null; echo '#none#')
+  scan | cut -f1 | sort -u | grep -vxF -f <(cat "$off_file" 2>/dev/null; echo '#none#')
 }
+
+essential() { printf '%s\n' "$ESSENTIAL" | tr ' ' '\n'; }
 
 # IDs of the plugins that ship inside the app. If you update one of them, the update lands next to
 # your own plugins, and it must not be offered for removal.
@@ -114,12 +123,28 @@ if [ "$MODE" = "--save" ]; then
     done < "$LIST"
     # Then whatever is installed but not listed yet (only when every entry could be checked,
     # otherwise a plugin that's already listed by number would be added twice)
+    # (updates of PyCharm's own plugins land next to yours, but they don't belong on the list)
     if [ "$unchecked" = 0 ] && [ -n "$have" ]; then
-      comm -23 <(printf '%s\n' "$have") <(printf '%s' "$kept" | sort -u)
+      comm -23 <(printf '%s\n' "$have") <(printf '%s' "$kept" | sort -u) | grep -vxF -f <(bundled; echo '#none#')
     fi
   } > "$LIST.tmp" && mv "$LIST.tmp" "$LIST"
   ok "saved $(entry < "$LIST" | grep -c .) plugins to ${LIST/#"$HOME"/\~}"
   [ "$unchecked" = 0 ] || warn "couldn't reach the Marketplace, so new plugins weren't added. Run it again online"
+
+  # disabled.txt: the built-in plugins switched off now, keeping comments and notes
+  off="$(grep . "$off_file" 2>/dev/null | sort -u | grep -vxF -f <(essential))"
+  if command -v jq >/dev/null; then off="$(comm -12 <(printf '%s\n' "$off") <(bundled))"; fi
+  [ -f "$OFF_LIST" ] || printf '# Built-in PyCharm plugins to keep switched off, one ID per line. See bin/pycharm-sync.\n' > "$OFF_LIST"
+  listed=""
+  {
+    while IFS= read -r line; do
+      id="$(printf '%s\n' "$line" | entry)"
+      if [ -z "$id" ]; then printf '%s\n' "$line"; continue; fi
+      if printf '%s\n' "$off" | grep -qxF "$id"; then printf '%s\n' "$line"; listed="$listed$id"$'\n'; fi
+    done < "$OFF_LIST"
+    [ -z "$off" ] || comm -23 <(printf '%s\n' "$off") <(printf '%s' "$listed" | sort -u)
+  } > "$OFF_LIST.tmp" && mv "$OFF_LIST.tmp" "$OFF_LIST"
+  ok "saved $(entry < "$OFF_LIST" | grep -c .) switched-off built-in plugins to ${OFF_LIST/#"$HOME"/\~}"
   exit 0
 fi
 
@@ -154,7 +179,29 @@ if [ -n "$missing" ]; then
   done
 fi
 
-# 2. Offer to remove the rest. Not when part of the list couldn't be looked up: those plugins
+# 2. Switch off the built-in plugins in disabled.txt, and switch Python back on if it was off.
+#    PyCharm reads and rewrites disabled_plugins.txt itself, so only touch it while it's closed.
+off_want="$([ -f "$OFF_LIST" ] && entry < "$OFF_LIST" | grep . | sort -u | grep -vxF -f <(essential))"
+off_now="$(grep . "$off_file" 2>/dev/null | sort -u)"
+to_off=""
+[ -z "$off_want" ] || to_off="$(comm -23 <(printf '%s\n' "$off_want") <(printf '%s\n' "$off_now"))"
+to_on="$(printf '%s\n' "$off_now" | grep -xF -f <(essential))"
+if [ -n "$to_off$to_on" ]; then
+  if running; then
+    warn "Quit PyCharm (Cmd+Q) and run pycharm-sync again to apply disabled.txt"
+    status=1
+  else
+    mkdir -p "$config"
+    {
+      printf '%s\n' "$off_now" | grep . | grep -vxF -f <(essential)
+      [ -z "$to_off" ] || printf '%s\n' "$to_off"
+    } > "$off_file.tmp" && mv "$off_file.tmp" "$off_file"
+    [ -z "$to_off" ] || ok "switched off $(printf '%s\n' "$to_off" | grep -c .) built-in plugin(s) from disabled.txt"
+    [ -z "$to_on" ] || ok "switched back on, PyCharm needs them for Python: $(printf '%s\n' "$to_on" | tr '\n' ' ')"
+  fi
+fi
+
+# 3. Offer to remove the rest. Not when part of the list couldn't be looked up: those plugins
 #    would look like extras.
 if [ "$failed" -gt 0 ]; then
   warn "$failed plugin(s) couldn't be checked, so nothing was removed. Try again when you're online"

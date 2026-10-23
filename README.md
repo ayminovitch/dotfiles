@@ -52,7 +52,7 @@ Brewfile.apps        apps I use every day (optional)
 zsh/                 zshrc (oh-my-zsh + Powerlevel10k), zprofile, p10k config
 git/                 shared git config (delta for diffs, rebase on pull, zdiff3 conflicts)
 vscode/              settings, extensions, Python file templates, PyCharm-style look
-jetbrains/           PyCharm plugin list
+jetbrains/           PyCharm plugins to install, and built-in ones to keep switched off
 agents/              rules and skills for Claude Code and Gemini CLI
 claude/              Claude Code settings, hooks, status line, reviewer subagent
 templates/ai-project the Python project template used by newproj
@@ -90,6 +90,10 @@ Mac:
   and asks before moving any other plugin to the Trash (never PyCharm's own, or ones a listed
   plugin needs). Quit PyCharm first, it can't change plugins while it's open. After adding or
   removing one in PyCharm, `pycharm-sync --save` updates the list and keeps the notes
+- built-in plugins I don't use (JavaScript, CSS, remote development, language packs...):
+  `jetbrains/disabled.txt`, applied by the same `pycharm-sync` and saved by the same `--save`.
+  It never switches off Python or the SSH plugin Python needs, and switches them back on if
+  they were turned off by mistake
 - settings (theme, keymap, code style, actions on save): Settings → Backup and Sync, signed in
   with a JetBrains account, with its Plugins box unticked so it doesn't fight `plugins.txt`
   (a plugin removed while it syncs plugins also gets disabled in your other JetBrains IDEs).
